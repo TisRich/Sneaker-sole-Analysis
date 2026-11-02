@@ -25,20 +25,34 @@ E = 25e6;                   % Young's modulus (Pa)
 nu = 0.48;                  % Poisson's ratio
 
 % Applied loading
-F = 1946;                   % Target total force (N)
+F = 934;                    % Target total force (N)
 loadDirection = [0; 0; -1];
 
 % Heel-strike loading region
 heelRadius = 0.02;          % 2 cm radius (4 cm diameter)
 heelOffset = 0.06;          % 6 cm from rear
-heelAtMinX = true;          % Change if heel is at maximum X
+heelAtMinX = true;
 
 % Figure viewing settings
 viewAzimuth = -155;
 viewElevation = 25;
 
 % Existing results folder
-folderName = 'Results_Figures';
+folderName = 'UpdateResults_Figures';
+
+% Use the current MATLAB working directory
+outputFolder = fullfile(pwd, folderName);
+
+% Create the folder only if it does not exist
+if ~isfolder(outputFolder)
+    mkdir(outputFolder);
+    fprintf('Created results folder:\n%s\n', outputFolder);
+else
+    fprintf('Using existing results folder:\n%s\n', outputFolder);
+end
+
+% Use the full folder path throughout the script
+folderName = outputFolder;
 
 % Model and result storage
 Solemodel = cell(1,2);
@@ -70,7 +84,8 @@ for i = 1:numel(files)
     fprintf('Number of geometric faces: %d\n', ...
         model.Geometry.NumFaces);
 
-    % Display face identification
+    %% Display Face Identification
+
     h = figure;
 
     pdegplot(model, ...
@@ -94,14 +109,22 @@ for i = 1:numel(files)
 
     %% Generate Mesh
 
+    meshTimer = tic;
+
     msh = generateMesh(model, ...
         'Hmax',Hmax, ...
         'GeometricOrder',meshOrder);
 
+    meshTime = toc(meshTimer);
+
+    fprintf('Mesh generation time: %.2f seconds\n', ...
+        meshTime);
+
     fprintf('Nodes: %d\n',size(msh.Nodes,2));
     fprintf('Elements: %d\n',size(msh.Elements,2));
 
-    % Check mesh dimensions
+    %% Check Mesh Dimensions
+
     P = msh.Nodes';
 
     dimensions_cm = ...
@@ -158,7 +181,6 @@ for i = 1:numel(files)
 
     %% 3B. Boundary Conditions
 
-    % Preserve existing support configuration:
     % Fix all faces except the loading face
     fixedFaces = setdiff( ...
         1:model.Geometry.NumFaces,loadFaces{i});
@@ -316,7 +338,7 @@ for i = 1:numel(files)
 
     %% STEP 4: Prepare Heel-Strike Loading Case
 
-    % Remove the midfoot load before applying the heel load.
+    % Remove midfoot load before applying heel load.
     % Retain material, fixtures, geometry, and mesh.
     delete(midfootLoad);
 
@@ -345,7 +367,6 @@ for i = 1:numel(files)
 
     %% 4B. Identify Circular Heel Patch
 
-    % Centroids of eligible upper-surface triangles
     centroids = ( ...
         P(loadTri(:,1),:) + ...
         P(loadTri(:,2),:) + ...
@@ -405,9 +426,6 @@ for i = 1:numel(files)
     end
 
     %% 4E. Define Spatial Heel Traction
-
-    % Traction acts only within the circular region.
-    % Function returns a 3 x N matrix when vectorized.
 
     heelLoadFcn = @(location,state) ...
         loadDirection .* ( ...
@@ -501,7 +519,7 @@ for i = 1:numel(files)
 
 end
 
-%% STEP 5: Combined Summary Table
+%% STEP 5: Combined Summary Table and Safe Export
 
 fprintf('\n====================================\n');
 fprintf('COMBINED MIDFOOT AND HEEL RESULTS\n');
@@ -509,18 +527,89 @@ fprintf('====================================\n');
 
 disp(resultRows);
 
-writetable(resultRows, ...
-    fullfile(folderName, ...
-    'Combined_Midfoot_HeelStrike_Results.xlsx'));
+% Unique name prevents conflicts with existing Excel files
+timeStamp = datestr(now, 'yyyymmdd_HHMMSS');
 
-%% STEP 6: Adjust Views After Solving
+excelName = ...
+    ['Combined_Midfoot_HeelStrike_' timeStamp '.xlsx'];
 
-% Changes figure presentation only.
-% No mesh generation or FEA recalculation.
+excelPath = fullfile(folderName, excelName);
+
+exportStatus = 'Not saved';
+
+try
+
+    %% Attempt 1: Save Excel Workbook
+
+    writetable(resultRows, excelPath);
+
+    fprintf('\nExcel results saved successfully:\n');
+    fprintf('%s\n', excelPath);
+
+    exportStatus = 'Excel';
+
+catch ME
+
+    warning('Excel export failed: %s', ME.message);
+
+    %% Attempt 2: Save CSV in Existing Folder
+
+    csvName = ...
+        ['Combined_Midfoot_HeelStrike_' timeStamp '.csv'];
+
+    csvPath = fullfile(folderName, csvName);
+
+    try
+
+        writetable(resultRows, csvPath);
+
+        fprintf('\nResults saved as CSV:\n');
+        fprintf('%s\n', csvPath);
+
+        exportStatus = 'CSV';
+
+    catch ME2
+
+        warning('CSV export failed: %s', ME2.message);
+
+        %% Attempt 3: Save CSV to Temporary Folder
+
+        backupPath = fullfile(tempdir, csvName);
+
+        try
+
+            writetable(resultRows, backupPath);
+
+            fprintf('\nBackup results saved to:\n');
+            fprintf('%s\n', backupPath);
+
+            exportStatus = 'Temporary CSV';
+
+        catch ME3
+
+            warning('Backup export failed: %s', ...
+                ME3.message);
+
+            fprintf(['\nResults could not be saved, ' ...
+                'but remain available in resultRows.\n']);
+
+        end
+
+    end
+
+end
+
+%% STEP 6: Adjust Viewing Angles After Solving
+
+% Camera changes do not alter FEA results
 
 for k = 1:numel(figHandles)
 
     h = figHandles(k);
+
+    if ~isgraphics(h, 'figure')
+        continue;
+    end
 
     axList = findall(h,'Type','axes');
 
@@ -540,26 +629,68 @@ end
 
 %% STEP 7: Save All Figures
 
+savedFigures = 0;
+
 for k = 1:numel(figHandles)
 
     h = figHandles(k);
     fileName = figNames{k};
 
-    exportgraphics(h, ...
-        fullfile(folderName,[fileName '.png']), ...
-        'Resolution',300);
+    if ~isgraphics(h, 'figure')
+        warning('Skipping invalid figure: %s', fileName);
+        continue;
+    end
 
-    savefig(h, ...
-        fullfile(folderName,[fileName '.fig']));
+    %% Save High-Resolution PNG
+
+    try
+
+        exportgraphics(h, ...
+            fullfile(folderName,[fileName '.png']), ...
+            'Resolution',300);
+
+    catch ME
+
+        warning('PNG export failed for %s: %s', ...
+            fileName, ME.message);
+
+    end
+
+    %% Save Editable MATLAB Figure
+
+    try
+
+        savefig(h, ...
+            fullfile(folderName,[fileName '.fig']));
+
+        savedFigures = savedFigures + 1;
+
+    catch ME
+
+        warning('MATLAB FIG save failed for %s: %s', ...
+            fileName, ME.message);
+
+    end
 
 end
+
+%% STEP 8: Completion Summary
 
 fprintf('\n====================================\n');
 fprintf('COMBINED STATIC FEA COMPLETE\n');
 fprintf('====================================\n');
 
-fprintf('Figures saved: %d\n',numel(figHandles));
-fprintf('Output folder: %s\n',folderName);
+fprintf('Target force: %.1f N\n', F);
+fprintf('Mesh size: %.1f mm\n', Hmax*1000);
+
+fprintf('Simulation cases completed: %d\n', ...
+    height(resultRows));
+
+fprintf('Figure sets saved: %d of %d\n', ...
+    savedFigures, numel(figHandles));
+
+fprintf('Results export format: %s\n', exportStatus);
+fprintf('Output folder: %s\n', folderName);
 
 %% LOCAL FUNCTION 1: Triangle Surface Area
 
@@ -574,9 +705,10 @@ function A = calculateTriangleArea(P,tri)
 end
 
 %% LOCAL FUNCTION 2: Plot Loading Region
+
 % Gray = full sole exterior
 % Red = selected loading region
-% Black = boundary of selected region
+% Black = perimeter of selected region
 
 function drawLoadingRegion(P,surfaceTri,selectedTri)
 
@@ -584,7 +716,8 @@ function drawLoadingRegion(P,surfaceTri,selectedTri)
 
     hold(ax,'on');
 
-    % Display full external sole geometry
+    %% Display Full External Sole
+
     trisurf(surfaceTri, ...
         P(:,1),P(:,2),P(:,3), ...
         'FaceColor',[0.78 0.82 0.85], ...
@@ -592,7 +725,8 @@ function drawLoadingRegion(P,surfaceTri,selectedTri)
         'FaceAlpha',0.25, ...
         'Parent',ax);
 
-    % Highlight selected loading region
+    %% Highlight Selected Loading Region
+
     trisurf(selectedTri, ...
         P(:,1),P(:,2),P(:,3), ...
         'FaceColor',[0.95 0.20 0.12], ...
@@ -600,13 +734,13 @@ function drawLoadingRegion(P,surfaceTri,selectedTri)
         'FaceAlpha',1, ...
         'Parent',ax);
 
-    % Extract all triangle edges
+    %% Extract Triangle Edges
+
     edges = [ ...
         selectedTri(:,[1 2]); ...
         selectedTri(:,[2 3]); ...
         selectedTri(:,[3 1])];
 
-    % Identify edges shared by only one selected triangle
     edges = sort(edges,2);
 
     [uniqueEdges,~,edgeID] = ...
@@ -617,7 +751,8 @@ function drawLoadingRegion(P,surfaceTri,selectedTri)
     perimeterEdges = ...
         uniqueEdges(edgeCount == 1,:);
 
-    % Draw perimeter edges in black
+    %% Draw Perimeter in Black
+
     n = size(perimeterEdges,1);
 
     if n > 0
@@ -648,3 +783,4 @@ function drawLoadingRegion(P,surfaceTri,selectedTri)
     hold(ax,'off');
 
 end
+
