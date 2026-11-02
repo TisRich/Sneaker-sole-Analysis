@@ -21,10 +21,10 @@ The 3 mm element size was chosen from a mesh convergence study with a 5% toleran
 
 | Case | MATLAB stress (MPa) | SolidWorks stress (MPa) | MATLAB displacement (mm) | SolidWorks displacement (mm) |
 |---|---:|---:|---:|---:|
-| Flat, heel strike | 1.215 | 0.410 | 0.860 | 0.368 |
-| Flat, midfoot | 0.295 | 0.050 | 0.177 | 0.027 |
-| Curved, heel strike | 1.217 | 0.027 | 0.876 | 0.013 |
-| Curved, midfoot | 0.253 | 0.027 | 0.145 | 0.013 |
+| Flat, heel strike | 1.215 | 0.161 | 0.860 | 0.102 |
+| Flat, midfoot | 0.295 | 0.018 | 0.177 | 0.0128 |
+| Curved, heel strike | 1.217 | 0.027 | 0.876 | 0.0128 |
+| Curved, midfoot | 0.253 | 0.027 | 0.145 | 0.0064 |
 
 ![Peak von Mises stress](docs/charts/stress_comparison.svg)
 
