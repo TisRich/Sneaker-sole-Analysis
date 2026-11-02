@@ -30,5 +30,5 @@ Static FEA in MATLAB of two EVA sneaker soles (flat and curved) under normal wal
 ## Files
 
 - `matlab/SoleFEM.m`: runs all four cases and saves the figures and Excel results
-- `matlab/SoleFaces.m`: shows the face numbers of an STL
+- `matlab/SoleFaces.m`: shows the face numbers of an STL to help determine loading regions
 - `results/`: MATLAB figures, SolidWorks images, and the Excel summary
