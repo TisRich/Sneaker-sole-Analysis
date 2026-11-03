@@ -1,6 +1,8 @@
 # Sneaker Sole Analysis
 
-Static FEA in MATLAB of two EVA sneaker soles (flat and curved) under normal walking loads, compared with SolidWorks. This is a static study, so it does not cover running.
+## About
+
+This project uses static finite element analysis (FEA) to compare how a flat sole and a curved sole made of EVA respond to normal walking loads. Each sole is tested with a heel strike and a midfoot landing. The models are solved in MATLAB with the PDE Toolbox and checked against SolidWorks Simulation, using peak von Mises stress and displacement. Because the study is static, it does not cover running.
 
 ## Setup
 
